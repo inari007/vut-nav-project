@@ -1,0 +1,135 @@
+\documentclass[titlepage, a4paper, 11pt]{article}
+\usepackage[left=2cm,text={17cm, 24cm},top=3cm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[czech]{babel}
+\usepackage{times}
+\usepackage{float}
+\usepackage{verbatim}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{graphicx} % vkládání obrázků
+\newcommand{\myuv}[1]{\quotedblbase #1\textquotedblleft}
+\bibliographystyle{czplain}
+\usepackage{dirtree}
+
+
+
+\begin{document}
+
+\begin{titlepage}
+    \begin{center}
+            \Huge
+            \textsc{Fakulta informačních technologií}\\
+            \textsc{Vysoké učení technické v~Brně}\\
+        \vspace{\stretch{0.382}}
+        \LARGE
+        \textbf{Návrh vestavěných systémů}\\
+        Detekce objektů v obraze pomocí metod AI\\
+        \vspace{\stretch{0.618}}
+    \end{center}
+    {\Large \today \hfill
+Zdeněk Dobeš (xdobes21)}
+\end{titlepage}
+
+\pagenumbering{gobble}
+\tableofcontents
+\clearpage
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\section{Úvod}
+Jako téma projektu bylo vybráno ovládání videí na Youtube prostřednictvím sady gest, jež má nahradit potřebu fyzické klávesnice. Cílem implementace bylo zkusit poskytnout  možnost pohodlnější práce s tanečními videi během tréninků.    
+
+\section{Prerekvizity} 
+\textbf{Pro funkcionalitu ovladače videí}
+\begin{itemize}
+    \item \textit{Python 3.x} (Testováno na Python 3.8)
+    \item \textit{Mozilla firefox browser}
+    \item \textit{Geckodriver}
+\end{itemize}
+\\
+\textbf{Pro kompilaci a upload kódu na ESP32-EYE}
+\begin{itemize}
+    \item \textit{Arduino IDE}
+\end{itemize}
+
+\section{Struktura projektu}
+
+\DTsetlength{1em}{1em}{0.1em}{1pt}{4pt}
+\dirtree{%
+.1 /.
+.2 esp32\_code\DTcomment{zdroje na kompilaci pro ESP-EYE}.
+.3 ei-inari007-project-1-arduino-1.0.3{.}zip\DTcomment{knihovna pro klasifikátor}.
+.3 esp32\_camera{.}ino\DTcomment{Arduino kód}.
+.2 song\_controller\_code\DTcomment{zdroje pro interpret na funkci ovladače videí}.
+.3 config{.}txt\DTcomment{soubor s nastavením portu}.
+.3 file\_parser{.}py\DTcomment{zpracování vstupních souborů}.
+.3 links{.}txt\DTcomment{přednastavené odkazy na videa s názvy pro UI}.
+.3 main{.}py\DTcomment{hlavní soubor ke spuštění pro interpret}.
+.3 user\_interace{.}py\DTcomment{UI na selekci aktuálního videa}.
+.3 youtube\_player{.}py\DTcomment{ovladač videí na YouTube}.
+.2 doc{.}tex\DTcomment{zdrojový kód dokumentace}.
+.2 doc{.}pdf\DTcomment{dokumentace}.
+}
+
+\section{Postup řešení}
+\subsection{Klasifikátor}
+Klasifikátor byl vytvořen za pomoci doporučené platformy na trénování modelů \textbf{Edge Impulse}. Nejprve se vytvořil dataset o 3 klasifikačních třídách o velikosti 225 prvků. Ty byly sesbírány pomocí fotoaparátu běžného telefonu a na webové platformě jednotlivě označeny. Jedná se o třídy \textbf{thumb}, která představuje zvednutý palec, \textbf{palm} neboli vztyčenou dlaň a \textbf{left} jež jsou 2 prsty ukazující směrem doleva orientovaným od uživatele ke kameře. Dataset obsahuje pro každou třídu právě 75 označených fotografií.
+
+Před trénováním se obrázky pomocí Edge Impulse převedly na rozměry 96x96 kvůli rychlosti vyhodnocování a paměťových nároků mikrokontroleru. Zároveň se převedly na grayscale opět pro výkonostní účely a také zlepšení generalizace. Pro samotné trénování byl zvolen model \textbf{FOMO MobileNetV2 0.1} a po několika testovacích bězích jsem konvergoval k zdá se nejoptimálnějším parametrům a to 50 trénovacím cyklům s learning ratem 0.001. Následné vygenerované knihovny s klasifikátorem se nachází ve složce \textit{esp32\_code} a pro správný průběh kompilace musí být naimportovány do Arduino IDE.
+
+\begin{figure*}[h]
+\begin{subfigure}{0.32\textwidth}
+    \includegraphics[width=\textwidth]{NAV/thumb.png}
+    \caption{Palec nahoře (thumb).}
+    \label{thumb}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.32\textwidth}
+    \includegraphics[width=\textwidth]{NAV/palm.png}
+    \caption{Vztyčená dlaň (palm)}
+    \label{palm}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.32\textwidth}
+    \includegraphics[width=\textwidth]{NAV/left.png}
+    \caption{Prsty doleva (left)}
+    \label{left}
+\end{subfigure}
+\hfill
+\end{figure*}
+
+Knihovna poskytuje exemplární svazky kódu, jechž jeden z nich byl využit jako šablona pro implementaci a adekvátně modifikován, aby poskytoval na výstupu pouze název klasifikační třídy. Ty posílá v půl vteřinových intervalech na svůj USB port.
+
+\subsection{Ovladač videí}
+
+Pro ovladač videí byl zvolen skriptovací jazyk \textbf{Python} z důvodu podpory řady knihoven jež výsledná aplikace vyžaduje. Hlavní smyčka programu odposlouchává na sériovém portu, jež se definuje v souboru \textit{config.txt}. V něm se také definují cesta k \textit{firefox.exe} a cesta ke \textit{geckodriver.exe}. Kromě něj se načte i soubor \textit{links.txt}, která obsahuje uživatelův seznam libovolného výběru písniček ve tvaru:
+$$\texttt{[název] - [YouTube URL]}$$.
+
+Po spuštění skriptu dojde k otevření nového okna prohlížeče. Pro manipulaci s ním byla využita knihovna \textbf{Selenium}. Skript reaguje na výstupní data z portu a volí akce na základě aktuální klasifikační třídy. Pro hodnotu \textbf{thumb} se video spustí či odpozastaví, pro \textbf{palm} dojde k pozastavení a pro \textbf{left} k přetočení obsahu zpátky o 5s.
+
+Krom prohlížeče je uživateli po spuštění poskytnu malé uživatelské rozhraní běžící na dalším vlákně. Jeho funkcí je selekce z předdefinovaných písniček. Rozhraní obsahuje řadu tlačítek s názvy písniček, které po stisknutí přesměrují spuštěný prohlížeč na odpovídající URL. UI je implementováno pomocí knihovny \textbf{Tkinter}.
+
+\section{Limitace a slepé cesty}
+
+\subsection{Klasifikace}
+
+Implementace klasifikátoru nejprve obsahovala 4. třídu a to \textbf{right} neboli přetáčení dopředu čítaje tak původní dataset o hodnotu 300 prvků. Natrénovaný model však poskytoval zavádějící a nekonzistentní výsledky. Tyto nešvary by byly s větší trénovací sadou omezeny, avšak pro naše řešení jsme zvolili tuto třídu eliminovat, jelikož se jednalo o nejméně důlěžitou funkci.
+
+Pro vytvoření trénovací sady bylo využíváno řady prostředí, ale pouze ruky jednoho jedince. Pro jasnější klasifikaci byla veškerá gesta trénována pro rozpoznávání na \textbf{levé ruce}. Pro lehké obohacení testovací sady bylo využíváno odrazu zrcadla ruky pravé.
+
+Klasifikace jednotlivých gest není jednoznačná, tudíž je pro minimalizaci chybovosti pro vykonání akce vyžadováno získání 2x stejného gesta po sobě. Toto se alespoň pro domácí prostředí osvědčilo jako spolehlivé řešení. Samotné vyhodnocení klasifikace trvá okolo 1s a výstup klasifikátoru je k dispozici přibližně každou 0.5s. Minimální doba programu ke zpracování klasifikace je tedy cca 1.5s.
+
+\subsection{Ovladač videí}
+
+Implementace se nejprve pokoušela o zpracování offline videí a manipulace s nimi a to pomocí knihoven jako \textbf{OpenCV}, \textbf{Pygame} nebo \textbf{pyvidplayer2}. Všechna řešení vyžadovala konvertovat video na externí zvukové stopy, jež probíhalo za běhu programu pomocí nástroje \textbf{FFmpeg}, avšak koordinace výsledného zvuku s videem byl hlavní klíč neúspěchu. Pro online videa bylo nejprve přihlíženo na prohlížeč \textbf{Google Chrome} využívajíc \textit{chromedriver.exe}, avšak ten vyžaduje starší verze prohlížeče, jehož downgrade by způsobil odstranění cookies, což se jevilo bolestivě.
+
+\section{Závěr}
+
+Výsledné řešení funguje na omezené vzdálenosti v domácím prostředí relativně spolehlivě, po instalaci mikrokontroleru na specifickém vyvýšeném místě by dle mého názoru průběh domácích tréninků zefektivnil. 
+
+Pro zdokonalení řešení se nabízí především rozšíření datové sady a zprovoznění funkce přetáčení dopředu. Za dalšími užitečnymi funkcemi by stálo rozšíření gest o změny rychlosti, které je v této oblasti zřídka využíváno a případné kreativní řešení přesunutí výběru písniček z uživatelského rozhraní do gestikulační podoby.
+
+\end{document}
